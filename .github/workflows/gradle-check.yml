@@ -79,7 +79,7 @@ jobs:
           cat git_diff.txt
           echo "-------------------------------------------------------"
           DIFF_CONTENT=$(cat git_diff.txt)
-          claude -p "$(cat << 'EOF'
+          PROMPT=$(cat << EOF
             Analyze the git diff between current commit HEAD and origin/main for security vulnerabilities and malicious code patterns.
             
             Review for security issues including but not limited to:
@@ -112,9 +112,9 @@ jobs:
             
             Here is the diff to analyze:
             $DIFF_CONTENT
-            
             EOF
-          )"
+          )
+          claude -p "$PROMPT"
           exit 1
           echo "DIFF_REPORT_JSON=$DIFF_REPORT" >> $GITHUB_ENV
   
