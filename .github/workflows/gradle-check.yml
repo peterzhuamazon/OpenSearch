@@ -79,7 +79,7 @@ jobs:
           cat git_diff.txt
           echo "-------------------------------------------------------"
           DIFF_CONTENT=$(cat git_diff.txt)
-          DIFF_REPORT=$(claude -p "$(cat << 'EOF'
+          claude -p "$(cat << 'EOF'
             Analyze the git diff between current commit HEAD and origin/main for security vulnerabilities and malicious code patterns.
             
             Review for security issues including but not limited to:
@@ -114,8 +114,45 @@ jobs:
             $DIFF_CONTENT
             
             EOF
-            )"
-          )
+          )"
+          exit 1
+#          DIFF_REPORT=$(claude -p "$(cat << 'EOF'
+#            Analyze the git diff between current commit HEAD and origin/main for security vulnerabilities and malicious code patterns.
+#            
+#            Review for security issues including but not limited to:
+#            - Injection vulnerabilities (SQL, command, LDAP, template, etc.)
+#            - Cross-site scripting (XSS) and improper output encoding
+#            - Authentication and authorization flaws
+#            - Insecure deserialization and XML parsing
+#            - Malicious code (data exfiltration, backdoors, obfuscated logic)
+#            - Hardcoded secrets and credential exposure
+#            - Suspicious network calls or external communications
+#            - Privilege escalation attempts
+#            - Insecure file operations and path traversal
+#            - Cryptographic weaknesses and insecure randomness
+#            - Any other suspicious or anomalous code patterns
+#            
+#            **IMPORTANT: Your response must be ONLY the raw JSON object. Do NOT wrap it in markdown code blocks. Do NOT add any explanation before or after. Start your response with { and end with }.**
+#            
+#            Required JSON format:
+#            {
+#              "total": <number>,
+#              "issues": [
+#                {
+#                  "file": "path/to/file",
+#                  "line": <number>,
+#                  "malicious": true|false,
+#                  "reasoning": "Brief explanation of the issue"
+#                }
+#              ]
+#            }
+#            
+#            Here is the diff to analyze:
+#            $DIFF_CONTENT
+#            
+#            EOF
+#            )"
+#          )
           echo "DIFF_REPORT_JSON=$DIFF_REPORT" >> $GITHUB_ENV
   
       - name: Process results
