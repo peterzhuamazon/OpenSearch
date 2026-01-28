@@ -78,11 +78,9 @@ jobs:
             -H "Accept: application/vnd.github.v3.diff" \
             "https://api.github.com/repos/${{ github.repository }}/compare/${bash_sha}...${head_sha}" > $DIFF_CONTENT_PATH
 
-          diff_content=$(cat $DIFF_CONTENT_PATH)
-          echo "DIFF_CONTENT=$diff_content" >> $GITHUB_ENV
           echo "Validate diff between base($bash_sha) and head($head_sha)"
           echo "-------------------------------------------------------"
-          echo $diff_content
+          cat $DIFF_CONTENT_PATH
           echo "-------------------------------------------------------"
   
       - name: Configure AWS credentials
@@ -93,6 +91,7 @@ jobs:
   
       - name: Verify file diffs
         run: |
+          DIFF_CONTENT=$(cat $DIFF_CONTENT_PATH)
           PROMPT=$(cat <<-EOF
           	Analyze the git diff between current commit HEAD and origin/main for security vulnerabilities and malicious code patterns.
           	
