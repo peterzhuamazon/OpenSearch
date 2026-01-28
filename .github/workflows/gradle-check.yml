@@ -130,7 +130,7 @@ jobs:
           claude -p "$PROMPT" > $DIFF_REPORT_PATH
           json_repair $DIFF_REPORT_PATH --inline --strict
           echo "Processing AI results"
-          diff_report_json=`cat $DIFF_REPORT_PATH`
+          diff_report_json=`cat $DIFF_REPORT_PATH | jq -c '.'`
           echo "DIFF_REPORT_JSON=$diff_report_json" >> $GITHUB_ENV
           echo "-------------------------------------------------------"
           echo $diff_report_json | jq -r
