@@ -49,12 +49,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 130
     steps:
-      - name: Checkout OpenSearch repo
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
-
+#      - name: Checkout OpenSearch repo
+#        uses: actions/checkout@v6
+#        with:
+#          ref: ${{ github.event.pull_request.head.sha }}
+#          #fetch-depth: 0
+#
       - uses: actions/setup-node@v6
         with:
           node-version: 24
@@ -82,8 +82,11 @@ jobs:
           BASE_SHA=${{ github.event.pull_request.base.sha }}
           HEAD_SHA=${{ github.event.pull_request.head.sha }}
 
-          git diff $BASE_SHA $HEAD_SHA > git_diff.txt
-          echo "Validate diff between base:$BASE_SHA and head:$HEAD_SHA"
+          curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3.diff" \
+            "https://api.github.com/repos/${{ github.repository }}/compare/${BASE_SHA}...${HEAD_SHA}" > git_diff.txt
+
+          echo "Validate diff between base($BASE_SHA) and head($HEAD_SHA)"
           echo "-------------------------------------------------------"
           cat git_diff.txt
           echo "-------------------------------------------------------"
@@ -126,6 +129,7 @@ jobs:
           )
           claude -p "$PROMPT" > $DIFF_REPORT_JSON
           json_repair $DIFF_REPORT_JSON --inline --strict
+          echo "Processing AI results"
           echo "-------------------------------------------------------"
           cat $DIFF_REPORT_JSON
           echo "-------------------------------------------------------"
@@ -137,7 +141,7 @@ jobs:
             echo "Found $DIFF_ISSUE_COUNT issues"
             if [ "$DIFF_ISSUE_COUNT" != "0" ]; then
               echo "Diff has issues"
-              DIFF_REPORT=$(echo "$SECURITY_REPORT" | jq -r '
+              DIFF_REPORT=$(echo "$DIFF_REPORT_JSON" | jq -r '
                 "<table>",
                 "<tr><th>File</th><th>Line</th><th>Malicious</th><th>Reasoning</th></tr>",
                 (.issues[] |
