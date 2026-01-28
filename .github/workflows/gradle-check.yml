@@ -144,14 +144,14 @@ jobs:
           echo "Found $DIFF_ISSUE_COUNT issues"
           if [ "$DIFF_ISSUE_COUNT" != "0" ]; then
             echo "Diff has issues"
-            diff_report=$(echo "$DIFF_REPORT_JSON" | jq -r '
+            diff_report=$(echo "$DIFF_REPORT_JSON" | jq -r '[
               "<table>",
               "<tr><th>File</th><th>Line</th><th>Malicious</th><th>Reasoning</th></tr>",
               (.issues[] |
                 "<tr><td>\(.file)</td><td>\(.line)</td><td>\(.malicious)</td><td>\(.reasoning)</td></tr>"
               ),
               "</table>"
-            ')
+            ] | join("")')
             echo "DIFF_REPORT=$diff_report" >> $GITHUB_ENV
             echo "DIFF_VALIDATED=false" >> $GITHUB_ENV
             exit 1
