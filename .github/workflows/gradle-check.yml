@@ -135,12 +135,8 @@ jobs:
           echo "-------------------------------------------------------"
           echo $diff_report_json | jq -r
           echo "-------------------------------------------------------"
-  
-      - name: Unset AWS credentials
-        uses: aws-actions/configure-aws-credentials@v5
-        with:
-          unset-current-credentials: true
-          aws-region: us-east-1
+          unset AWS_ACCESS_KEY_ID
+          unset AWS_SECRET_ACCESS_KEY  
 
       - name: Process diff results
         run: |
@@ -163,6 +159,7 @@ jobs:
             echo "Diff validated"
             echo "DIFF_VALIDATED=true" >> $GITHUB_ENV
           fi
+          exit 1
 
       - name: Checkout OpenSearch repo
         uses: actions/checkout@v6
