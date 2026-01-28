@@ -45,7 +45,7 @@ jobs:
       AWS_REGION: 'us-east-1'
       CLAUDE_CODE_MAX_OUTPUT_TOKENS: '4096'
       MAX_THINKING_TOKENS: '1024'
-      DIFF_REPORT_JSON: 'git_diff_validation.json'
+      DIFF_REPORT_PATH: 'git_diff_validation.json'
     runs-on: ubuntu-latest
     timeout-minutes: 130
     steps:
@@ -127,39 +127,35 @@ jobs:
           	$DIFF_CONTENT
           	EOF
           )
-          claude -p "$PROMPT" > $DIFF_REPORT_JSON
-          json_repair $DIFF_REPORT_JSON --inline --strict
+          claude -p "$PROMPT" > $DIFF_REPORT_PATH
+          json_repair $DIFF_REPORT_PATH --inline --strict
           echo "Processing AI results"
+          diff_report_json=`cat $DIFF_REPORT_PATH`
+          export "DIFF_REPORT_JSON=$diff_report_json" >> $GITHUB_ENV
           echo "-------------------------------------------------------"
-          cat $DIFF_REPORT_JSON
+          echo $diff_report_json | jq -r
           echo "-------------------------------------------------------"
   
       - name: Process results
         run: |
-          if (cat $DIFF_REPORT_JSON | jq -e . >/dev/null 2>&1); then
-            DIFF_ISSUE_COUNT=$(cat $DIFF_REPORT_JSON | jq -r .total)
-            echo "Found $DIFF_ISSUE_COUNT issues"
-            if [ "$DIFF_ISSUE_COUNT" != "0" ]; then
-              echo "Diff has issues"
-              DIFF_REPORT=$(echo "$DIFF_REPORT_JSON" | jq -r '
-                "<table>",
-                "<tr><th>File</th><th>Line</th><th>Malicious</th><th>Reasoning</th></tr>",
-                (.issues[] |
-                  "<tr><td>\(.file)</td><td>\(.line)</td><td>\(.malicious)</td><td>\(.reasoning)</td></tr>"
-                ),
-                "</table>"
-              ')
-              echo "DIFF_REPORT_TABLE=$DIFF_REPORT" >> $GITHUB_ENV
-              echo "DIFF_VALIDATED=false" >> $GITHUB_ENV
-              exit 1
-            else
-              echo "Diff validated"
-              echo "DIFF_VALIDATED=true" >> $GITHUB_ENV
-            fi
-          else
-            echo "Results with error"
-            echo "DIFF_VALIDATED=error" >> $GITHUB_ENV
+          DIFF_ISSUE_COUNT=$(echo $DIFF_REPORT_JSON | jq -r .total)
+          echo "Found $DIFF_ISSUE_COUNT issues"
+          if [ "$DIFF_ISSUE_COUNT" != "0" ]; then
+            echo "Diff has issues"
+            DIFF_REPORT=$(cat "$DIFF_REPORT_JSON" | jq -r '
+              "<table>",
+              "<tr><th>File</th><th>Line</th><th>Malicious</th><th>Reasoning</th></tr>",
+              (.issues[] |
+                "<tr><td>\(.file)</td><td>\(.line)</td><td>\(.malicious)</td><td>\(.reasoning)</td></tr>"
+              ),
+              "</table>"
+            ')
+            echo "DIFF_REPORT_TABLE=$DIFF_REPORT" >> $GITHUB_ENV
+            echo "DIFF_VALIDATED=false" >> $GITHUB_ENV
             exit 1
+          else
+            echo "Diff validated"
+            echo "DIFF_VALIDATED=true" >> $GITHUB_ENV
           fi
   
       - name: Setup environment variables (PR)
