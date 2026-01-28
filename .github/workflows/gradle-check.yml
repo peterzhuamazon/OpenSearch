@@ -83,8 +83,8 @@ jobs:
           HEAD_SHA=${{ github.event.pull_request.head.sha }}
 
           git diff $BASE_SHA $HEAD_SHA > git_diff.txt
-          echo "-------------------------------------------------------"
           echo "Validate diff between base:$BASE_SHA and head:$HEAD_SHA"
+          echo "-------------------------------------------------------"
           cat git_diff.txt
           echo "-------------------------------------------------------"
 
@@ -126,8 +126,9 @@ jobs:
           )
           claude -p "$PROMPT" > $DIFF_REPORT_JSON
           json_repair $DIFF_REPORT_JSON --inline --strict
+          echo "-------------------------------------------------------"
           cat $DIFF_REPORT_JSON
-          exit 1
+          echo "-------------------------------------------------------"
   
       - name: Process results
         run: |
@@ -298,5 +299,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Fail if gradle-check fails
-        if: ${{ needs.check-files.outputs.RUN_GRADLE_CHECK && needs.gradle-check.result == 'failure' }}
+        if: ${{ needs.check-files.outputs.RUN_GRADLE_CHECK && needs.gradle-check.result == 'failure' }} || ${{ env.DIFF_VALIDATED != 'true' }}
         run: exit 1
