@@ -80,6 +80,8 @@ jobs:
             echo "wrong github event"
             echo "DIFF_VALIDATED=false" >> $GITHUB_ENV
             exit 1
+          fi
+
           echo "HEAD_SHA=$head_sha" >> $GITHUB_ENV
 
           curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
