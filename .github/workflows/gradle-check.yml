@@ -321,13 +321,13 @@ jobs:
 
             Please examine the workflow log, locate, and copy-paste the failure(s) below, then iterate to green. Is the failure [a flaky test](https://github.com/opensearch-project/OpenSearch/blob/main/DEVELOPER_GUIDE.md#flaky-tests) unrelated to your change?
 
-      - name: Create Comment Failure Diff
+      - name: Create Comment Failure Git Diff Validation
         if: ${{ github.event_name == 'pull_request_target' && failure() && env.DIFF_VALIDATED != 'true'}}
         uses: peter-evans/create-or-update-comment@v5
         with:
           issue-number: ${{ env.pr_number }}
           body: |
-            :x: Gradle check result for ${{ env.pr_from_sha }}: ${{ env.result }}
+            :x: Gradle check did not start for ${{ env.pr_from_sha }}, please update your Pull Request accordingly:
 
             ${{ env.DIFF_REPORT }}
 
