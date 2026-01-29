@@ -188,13 +188,13 @@ jobs:
           fi
 
       - name: Checkout OpenSearch repo
-        if: ${{ env.DIFF_VALIDATED != 'true' }}
+        if: ${{ env.DIFF_VALIDATED == 'true' }}
         uses: actions/checkout@v6
         with:
           ref: ${{ env.HEAD_SHA }}
 
       - name: Checkout opensearch-build repo
-        if: ${{ env.DIFF_VALIDATED != 'true' }}
+        if: ${{ env.DIFF_VALIDATED == 'true' }}
         uses: actions/checkout@v6
         with:
           repository: opensearch-project/opensearch-build
@@ -249,7 +249,7 @@ jobs:
           echo "DIFF_VALIDATED=skipped" >> $GITHUB_ENV
 
       - name: Trigger jenkins workflow to run gradle check
-        if: ${{ github.event_name == 'push' || env.DIFF_VALIDATED != 'true' }}
+        if: ${{ github.event_name == 'push' || env.DIFF_VALIDATED == 'true' }}
         run: |
           set -e
           set -o pipefail
