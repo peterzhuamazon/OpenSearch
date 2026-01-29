@@ -80,11 +80,21 @@ jobs:
 
           echo "HEAD_SHA=$head_sha" >> $GITHUB_ENV
 
+          echo "Get diff between base($bash_sha) and head($head_sha)"
           curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github.v3.diff" \
             "https://api.github.com/repos/${{ github.repository }}/compare/${bash_sha}...${head_sha}" > $DIFF_CONTENT_PATH
 
-          echo "Validate diff between base($bash_sha) and head($head_sha)"
+          echo "Check diff size"
+          DIFF_SIZE=$(cat $DIFF_CONTENT_PATH | wc -c)
+          DIFF_TOKEN_EST=$((DIFF_SIZE / 3))
+          if [ "$DIFF_TOKEN_EST" -gt "$CLAUDE_CODE_MAX_INPUT_TOKENS" ]; then
+            echo "Diff too large, requires validation skip by the maintainers after manual review"
+            echo "DIFF_VALIDATED=false" >> $GITHUB_ENV
+            diff_size_notice="Diff too large, requires validation skip by the maintainers after manual review"
+            echo "DIFF_SIZE_NOTICE=$diff_size_notice" >> $GITHUB_ENV
+            exit 1
+          fi
           echo "-------------------------------------------------------"
           cat $DIFF_CONTENT_PATH
           echo "-------------------------------------------------------"
@@ -123,15 +133,6 @@ jobs:
       - name: Verify file diffs
         if: ${{ env.DIFF_VALIDATED != 'skipped'}}
         run: |
-          DIFF_SIZE=$(cat $DIFF_CONTENT_PATH | wc -c)
-          DIFF_TOKEN_EST=$((DIFF_SIZE / 3))
-          if [ "$DIFF_TOKEN_EST" -gt "$CLAUDE_CODE_MAX_INPUT_TOKENS" ]; then
-            echo "Diff too large, requires validation skip by the maintainers after manual review"
-            echo "DIFF_VALIDATED=false" >> $GITHUB_ENV
-            diff_size_notice="Diff too large, requires validation skip by the maintainers after manual review"
-            echo "DIFF_SIZE_NOTICE=$diff_size_notice" >> $GITHUB_ENV
-            exit
-          fi
           DIFF_CONTENT=$(cat $DIFF_CONTENT_PATH)
           PROMPT=$(cat <<-EOF
           	Analyze the git diff between current commit HEAD and origin/main for security vulnerabilities and malicious code patterns.
