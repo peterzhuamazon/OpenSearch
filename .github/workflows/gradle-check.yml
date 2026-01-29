@@ -322,7 +322,7 @@ jobs:
             Please examine the workflow log, locate, and copy-paste the failure(s) below, then iterate to green. Is the failure [a flaky test](https://github.com/opensearch-project/OpenSearch/blob/main/DEVELOPER_GUIDE.md#flaky-tests) unrelated to your change?
 
       - name: Create Comment Failure Diff
-        if: ${{ github.event_name == 'pull_request_target' && env.DIFF_VALIDATED != 'true'}}
+        if: ${{ github.event_name == 'pull_request_target' && failure() && env.DIFF_VALIDATED != 'true'}}
         uses: peter-evans/create-or-update-comment@v5
         with:
           issue-number: ${{ env.pr_number }}
