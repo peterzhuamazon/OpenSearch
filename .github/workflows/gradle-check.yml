@@ -108,6 +108,7 @@ jobs:
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           BEDROCK_ACCESS_ROLE: op://opensearch-infra-secrets/aws-iam-roles/bedrock-access-role
+          JENKINS_GRADLE_CHECK_GENERIC_WEBHOOK_TOKEN: op://opensearch-infra-secrets/webhook/jenkins-gradle-check-generic-webhook-token
           JENKINS_GITHUB_USER: op://opensearch-infra-secrets/github-bot/jenkins-github-user
           JENKINS_GITHUB_USER_TOKEN: op://opensearch-infra-secrets/github-bot/jenkins-github-user-token
 
@@ -272,7 +273,7 @@ jobs:
         run: |
           set -e
           set -o pipefail
-          bash opensearch-build/scripts/gradle/gradle-check.sh -t ${{ secrets.JENKINS_GRADLE_CHECK_GENERIC_WEBHOOK_TOKEN }} -u $JENKINS_GITHUB_USER -p $JENKINS_GITHUB_USER_TOKEN | tee -a gradle-check.log
+          bash opensearch-build/scripts/gradle/gradle-check.sh -t $JENKINS_GRADLE_CHECK_GENERIC_WEBHOOK_TOKEN -u $JENKINS_GITHUB_USER -p $JENKINS_GITHUB_USER_TOKEN | tee -a gradle-check.log
 
       - name: Setup Result Status
         if: always()
