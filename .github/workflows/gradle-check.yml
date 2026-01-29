@@ -51,10 +51,12 @@ jobs:
     timeout-minutes: 130
     steps:
       - uses: actions/setup-node@v6
+        if: github.event_name == 'pull_request_target'
         with:
           node-version: 24
   
       - name: Load secret
+        if: github.event_name == 'pull_request_target'
         uses: 1password/load-secrets-action@v3
         with:
           # Export loaded secrets as environment variables
@@ -64,11 +66,13 @@ jobs:
           BEDROCK_ACCESS_ROLE: op://opensearch-infra-secrets/aws-iam-roles/bedrock-access-role
 
       - name: Install necessary packages
+        if: github.event_name == 'pull_request_target'
         run: |
           npm install -g @anthropic-ai/claude-code
           pip install json-repair
 
       - name: Retrieve file diffs
+        if: github.event_name == 'pull_request_target'
         run: |
           bash_sha=${{ github.event.pull_request.base.sha }}
           head_sha=${{ github.event.pull_request.head.sha }}
@@ -84,12 +88,14 @@ jobs:
           echo "-------------------------------------------------------"
   
       - name: Configure AWS credentials
+        if: github.event_name == 'pull_request_target'
         uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ env.BEDROCK_ACCESS_ROLE }}
           aws-region: us-east-1
   
       - name: Verify file diffs
+        if: github.event_name == 'pull_request_target'
         run: |
           DIFF_CONTENT=$(cat $DIFF_CONTENT_PATH)
           PROMPT=$(cat <<-EOF
@@ -108,17 +114,30 @@ jobs:
           	- Cryptographic weaknesses and insecure randomness
           	- Any other suspicious or anomalous code patterns
           	
+          	
+          	Classify each issue by severity based on impact and exploitability:
+          	- **critical**: Allows immediate system compromise, data breach, or arbitrary code execution with minimal effort or authentication
+          	- **high**: Enables unauthorized access, significant data exposure, or system manipulation requiring moderate effort or preconditions
+          	- **medium**: Could lead to limited information disclosure, denial of service, or requires significant preconditions to exploit
+          	- **low**: Minor security weaknesses with minimal impact or requires extensive preconditions and authenticated access to exploit
+          	
           	**IMPORTANT: Your response must be ONLY the raw JSON object. Do NOT wrap it in markdown code blocks. Do NOT add any explanation before or after. Start your response with { and end with }.**
           	
           	Required JSON format:
           	{
-          	  "total": <number>,
+          	  "counts": {
+          	    "total": <number>,
+          	    "critical": <number>,
+          	    "high": <number>,
+          	    "medium": <number>,
+          	    "low": <number>
+          	  },
           	  "issues": [
           	    {
-          	      "file": "path/to/file",
+          	      "path": "path/to/file",
           	      "line": <number>,
-          	      "malicious": true|false,
-          	      "reasoning": "Brief explanation of the issue"
+          	      "severity": "critical|high|medium|low",
+          	      "description": "Brief explanation of the issue"
           	    }
           	  ]
           	}
@@ -139,32 +158,48 @@ jobs:
           unset AWS_SECRET_ACCESS_KEY  
 
       - name: Process diff results
+        if: github.event_name == 'pull_request_target'
         run: |
           DIFF_ISSUE_COUNT=$(echo $DIFF_REPORT_JSON | jq -r .total)
           echo "Found $DIFF_ISSUE_COUNT issues"
           if [ "$DIFF_ISSUE_COUNT" != "0" ]; then
             echo "Diff has issues"
-            diff_report=$(echo "$DIFF_REPORT_JSON" | jq -r '[
-              "<table>",
-              "<tr><th>File</th><th>Line</th><th>Malicious</th><th>Reasoning</th></tr>",
-              (.issues[] |
-                "<tr><td>\(.file)</td><td>\(.line)</td><td>\(.malicious)</td><td>\(.reasoning)</td></tr>"
-              ),
-              "</table>"
-            ] | join("")')
+            diff_report=$(echo "$DIFF_REPORT_JSON" | jq -r '
+              "<table><tr><th>Path</th><th>Line</th><th>Severity</th><th>Description</th></tr>" +
+              (
+                .issues | map(
+                  "<tr><td>" + .path + "</td><td>" + 
+                  (.line | tostring) + "</td><td>" + 
+                  .severity + "</td><td>" + 
+                  .description + "</td></tr>"
+                ) | join("")
+              ) +
+              "</table><p>Total: " + (.counts.total | tostring) + 
+              " | Critical: " + (.counts.critical | tostring) + 
+              " | High: " + (.counts.high | tostring) + 
+              " | Medium: " + (.counts.medium | tostring) + 
+              " | Low: " + (.counts.low | tostring) + "</p>"
+            ')
             echo "DIFF_REPORT=$diff_report" >> $GITHUB_ENV
             echo "DIFF_VALIDATED=false" >> $GITHUB_ENV
-            exit 1
           else
             echo "Diff validated"
             echo "DIFF_VALIDATED=true" >> $GITHUB_ENV
           fi
-          exit 1
 
       - name: Checkout OpenSearch repo
+        if: ${{ env.DIFF_VALIDATED != 'true' }}
         uses: actions/checkout@v6
         with:
           ref: ${{ env.HEAD_SHA }}
+
+      - name: Checkout opensearch-build repo
+        if: ${{ env.DIFF_VALIDATED != 'true' }}
+        uses: actions/checkout@v6
+        with:
+          repository: opensearch-project/opensearch-build
+          ref: main
+          path: opensearch-build
   
       - name: Setup environment variables (PR)
         if: github.event_name == 'pull_request_target'
@@ -199,7 +234,7 @@ jobs:
         if: github.event_name == 'push'
         run: |
           repo_url="https://github.com/opensearch-project/OpenSearch"
-          ref_id=$(git rev-parse HEAD)
+          ref_id=${{ env.HEAD_SHA }}
           branch_name=$(git rev-parse --abbrev-ref HEAD)
           echo "branch_name=$branch_name" >> $GITHUB_ENV
           echo "event_name=push" >> $GITHUB_ENV
@@ -211,15 +246,10 @@ jobs:
           echo 'pr_number=${{ fromJson(steps.get_pr_data.outputs.result).number }}' >> $GITHUB_ENV
           echo "pr_or_commit_description=$(jq --ascii-output .head_commit.message $GITHUB_EVENT_PATH)" >> $GITHUB_ENV
           echo "post_merge_action=true" >> $GITHUB_ENV
-
-      - name: Checkout opensearch-build repo
-        uses: actions/checkout@v6
-        with:
-          repository: opensearch-project/opensearch-build
-          ref: main
-          path: opensearch-build
+          echo "DIFF_VALIDATED=skipped" >> $GITHUB_ENV
 
       - name: Trigger jenkins workflow to run gradle check
+        if: ${{ github.event_name == 'push' || env.DIFF_VALIDATED != 'true' }}
         run: |
           set -e
           set -o pipefail
@@ -228,7 +258,8 @@ jobs:
       - name: Setup Result Status
         if: always()
         run: |
-          if [ "$DIFF_VALIDATED" = "true" ]; then
+          github_event_name=${{ github.event_name }}
+          if [ "$DIFF_VALIDATED" = "true" ] || [ "$github_event_name" = "push" ]; then
             WORKFLOW_URL=`cat gradle-check.log | grep 'WORKFLOW_URL' | awk '{print $2}'`
             RESULT=`cat gradle-check.log | grep 'Result:' | awk '{print $2}'`
           else
