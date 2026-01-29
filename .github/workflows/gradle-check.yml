@@ -355,7 +355,7 @@ jobs:
 
             ***
 
-            **OpenSearch-Core Maintainers**: you can bypass this validation by adding label `skip-diff-validation` after reviewing the changes carefully, then re-trigger check.
+            **OpenSearch Maintainers**: you can `bypass this validation` by adding label `skip-diff-validation` after reviewing the changes carefully, `then re-trigger check with a new commit`.
 
             :warning: Note: This validation helps protect against potentially harmful code patterns. Please ensure you have thoroughly reviewed the changes before bypassing.
 
