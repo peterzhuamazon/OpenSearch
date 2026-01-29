@@ -43,6 +43,7 @@ jobs:
     env:
       CLAUDE_CODE_USE_BEDROCK: '1'
       AWS_REGION: 'us-east-1'
+      CLAUDE_CODE_MAX_INPUT_TOKENS: '200000'
       CLAUDE_CODE_MAX_OUTPUT_TOKENS: '4096'
       MAX_THINKING_TOKENS: '1024'
       DIFF_CONTENT_PATH: 'git_diff_content.txt'
@@ -122,6 +123,15 @@ jobs:
       - name: Verify file diffs
         if: ${{ env.DIFF_VALIDATED != 'skipped'}}
         run: |
+          DIFF_SIZE=$(cat $DIFF_CONTENT_PATH | wc -c)
+          DIFF_TOKEN_EST=$((DIFF_SIZE / 3))
+          if [ "$DIFF_TOKEN_EST" -gt "$CLAUDE_CODE_MAX_INPUT_TOKENS" ]; then
+            echo "Diff too large, requires validation skip by the maintainers after manual review"
+            echo "DIFF_VALIDATED=false" >> $GITHUB_ENV
+            diff_size_notice="Diff too large, requires validation skip by the maintainers after manual review"
+            echo "DIFF_SIZE_NOTICE=$diff_size_notice" >> $GITHUB_ENV
+            exit
+          fi
           DIFF_CONTENT=$(cat $DIFF_CONTENT_PATH)
           PROMPT=$(cat <<-EOF
           	Analyze the git diff between current commit HEAD and origin/main for security vulnerabilities and malicious code patterns.
@@ -146,6 +156,13 @@ jobs:
           	- **medium**: Could lead to limited information disclosure, denial of service, or requires significant preconditions to exploit
           	- **low**: Minor security weaknesses with minimal impact or requires extensive preconditions and authenticated access to exploit
           	
+          	**OUTPUT CONSTRAINTS:**
+          	- Maximum 10 issues in the output
+          	- Prioritize by severity: critical > high > medium > low
+          	- If more than 10 issues found, include only the top 10 most severe
+          	- In "counts.total", report the ACTUAL total number of issues found (even if truncated)
+          	- Update the "truncated" boolean field to 'true' if issues were limited in output, else keep it 'false'
+          	
           	**IMPORTANT: Your response must be ONLY the raw JSON object. Do NOT wrap it in markdown code blocks. Do NOT add any explanation before or after. Start your response with { and end with }.**
           	
           	Required JSON format:
@@ -157,6 +174,7 @@ jobs:
           	    "medium": <number>,
           	    "low": <number>
           	  },
+          	  "truncated": <boolean>,
           	  "issues": [
           	    {
           	      "path": "path/to/file",
@@ -174,7 +192,7 @@ jobs:
           claude -p "$PROMPT" > $DIFF_REPORT_PATH
           json_repair $DIFF_REPORT_PATH --inline --strict
           echo "Processing AI results"
-          diff_report_json=`cat $DIFF_REPORT_PATH | jq -c '.'`
+          diff_report_json=$(cat $DIFF_REPORT_PATH | jq -c '.')
           echo "-------------------------------------------------------"
           echo $diff_report_json | jq -r
           echo "-------------------------------------------------------"
@@ -183,11 +201,16 @@ jobs:
 
           echo "Start issue count"
           DIFF_ISSUE_COUNT=$(echo $diff_report_json | jq -r .counts.total)
+          DIFF_TRUNCATED=$(echo $diff_report_json | jq -r .truncated)
           echo "Found $DIFF_ISSUE_COUNT issues"
           echo "-------------------------------------------------------"
           if [ "$DIFF_ISSUE_COUNT" != "0" ]; then
             echo "Diff has issues, please update your PR based on the validation results"
             echo "DIFF_VALIDATED=false" >> $GITHUB_ENV
+            if [ "$DIFF_TRUNCATED" = "true" ]; then
+              truncated_notice="More than 10 issues were detected. The table below displays the top 10 most critical findings"
+              echo "TRUNCATED_NOTICE=$truncated_notice" >> $GITHUB_ENV
+            fi
             diff_report=$(echo "$diff_report_json" | jq -r '
               "<table><tr><th>Path</th><th>Line</th><th>Severity</th><th>Description</th></tr>" +
               (
@@ -351,6 +374,10 @@ jobs:
             :x: Gradle check **WAS NOT STARTED** for ${{ env.pr_from_sha }} due to automated code diff validation findings.
 
             **Pull Request Author**: Please update your Pull Request accordingly:
+
+            ${{ env.DIFF_SIZE_NOTICE }}
+
+            ${{ env.TRUNCATED_NOTICE }}
 
             ${{ env.DIFF_REPORT }}
 
