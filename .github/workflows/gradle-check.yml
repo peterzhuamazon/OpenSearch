@@ -6,7 +6,7 @@ on:
 #      - 'create-pull-request/**'
 #      - 'dependabot/**'
   pull_request_target:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, labeled]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
@@ -50,32 +50,27 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 130
     steps:
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-  
-      - name: Load secret
-        uses: 1password/load-secrets-action@v3
-        with:
-          # Export loaded secrets as environment variables
-          export-env: true
-        env:
-          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
-          BEDROCK_ACCESS_ROLE: op://opensearch-infra-secrets/aws-iam-roles/bedrock-access-role
-
-      - name: Install necessary packages
-        run: |
-          npm install -g @anthropic-ai/claude-code
-          pip install json-repair
-
       - name: Retrieve file diffs
         run: |
-          if [ "${{ github.event_name }}" == "push" ]; then
+          if [ "${{ github.event_name }}" = "push" ]; then
             base_sha="${{ github.event.before }}"
             head_sha="${{ github.event.after }}"
-          elif [ "${{ github.event_name }}" == "pull_request_target" ]; then
+          elif [ "${{ github.event_name }}" = "pull_request_target" ]; then
             bash_sha=${{ github.event.pull_request.base.sha }}
             head_sha=${{ github.event.pull_request.head.sha }}
+            if [ "${{ github.event.action }}" = "labeled" ]; then
+              PR_LABELS=`echo "${{ toJson(github.event.pull_request.labels.*.name) }}" | sed -e 's/\[//g;s/\]//g;s/^\s*//g;s/\s*$//g' | tr -d '\n'`
+              echo "labels: $PR_LABELS"
+              export IFS=','
+              for label in $PR_LABELS
+              do
+                if [[ "$label" = "skip-diff-validation" ]]; then
+                  echo "Diff validation skipped due to label \"skip-diff-validation\", trigger gradle check."
+                  echo "DIFF_VALIDATED=skipped" >> $GITHUB_ENV
+                  exit 0
+                fi
+              done
+            fi
           else
             echo "wrong github event"
             echo "DIFF_VALIDATED=false" >> $GITHUB_ENV
@@ -93,13 +88,36 @@ jobs:
           cat $DIFF_CONTENT_PATH
           echo "-------------------------------------------------------"
   
+      - uses: actions/setup-node@v6
+        if: ${{ env.DIFF_VALIDATED != 'skipped'}}
+        with:
+          node-version: 24
+  
+      - name: Install necessary packages
+        if: ${{ env.DIFF_VALIDATED != 'skipped'}}
+        run: |
+          npm install -g @anthropic-ai/claude-code
+          pip install json-repair
+
+      - name: Load secret
+        if: ${{ env.DIFF_VALIDATED != 'skipped'}}
+        uses: 1password/load-secrets-action@v3
+        with:
+          # Export loaded secrets as environment variables
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          BEDROCK_ACCESS_ROLE: op://opensearch-infra-secrets/aws-iam-roles/bedrock-access-role
+
       - name: Configure AWS credentials
+        if: ${{ env.DIFF_VALIDATED != 'skipped'}}
         uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ env.BEDROCK_ACCESS_ROLE }}
           aws-region: us-east-1
   
       - name: Verify file diffs
+        if: ${{ env.DIFF_VALIDATED != 'skipped'}}
         run: |
           DIFF_CONTENT=$(cat $DIFF_CONTENT_PATH)
           PROMPT=$(cat <<-EOF
@@ -165,7 +183,7 @@ jobs:
           echo "Found $DIFF_ISSUE_COUNT issues"
           echo "-------------------------------------------------------"
           if [ "$DIFF_ISSUE_COUNT" != "0" ]; then
-            echo "Diff has issues"
+            echo "Diff has issues, please update your PR based on the validation results"
             echo "DIFF_VALIDATED=false" >> $GITHUB_ENV
             diff_report=$(echo "$diff_report_json" | jq -r '
               "<table><tr><th>Path</th><th>Line</th><th>Severity</th><th>Description</th></tr>" +
@@ -186,7 +204,7 @@ jobs:
             echo "DIFF_REPORT=$diff_report" >> $GITHUB_ENV
             exit 1
           else
-            echo "Diff validated"
+            echo "Diff is validated"
             echo "DIFF_VALIDATED=true" >> $GITHUB_ENV
           fi
 
@@ -327,9 +345,19 @@ jobs:
         with:
           issue-number: ${{ env.pr_number }}
           body: |
-            :x: Gradle check did not start for ${{ env.pr_from_sha }}, please update your Pull Request accordingly:
+            :x: Gradle check `**WAS NOT STARTED** for ${{ env.pr_from_sha }} due to automated code diff validation findings.
+
+            **Pull Request Author**: Please update your Pull Request accordingly:
 
             ${{ env.DIFF_REPORT }}
+
+            ***
+
+            **OpenSearch-Core Maintainers**: you can bypass this validation by adding label `skip-diff-validation` after reviewing the changes carefully.
+
+            :warning: Note: This validation helps protect against potentially harmful code patterns. Please ensure you have thoroughly reviewed the changes before bypassing.
+
+            Thanks.
 
   check-result:
     needs: [check-files, gradle-check]
