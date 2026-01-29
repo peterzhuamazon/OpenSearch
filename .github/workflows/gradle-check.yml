@@ -1,10 +1,10 @@
 name: Gradle Check (Jenkins)
 on:
-#  push:
-#    branches-ignore:
-#      - 'backport/**'
-#      - 'create-pull-request/**'
-#      - 'dependabot/**'
+  push:
+    branches-ignore:
+      - 'backport/**'
+      - 'create-pull-request/**'
+      - 'dependabot/**'
   pull_request_target:
     types: [opened, synchronize, reopened]
 
@@ -33,17 +33,16 @@ jobs:
 
   gradle-check:
     needs: check-files
-    #if: github.repository == 'opensearch-project/OpenSearch' && needs.check-files.outputs.RUN_GRADLE_CHECK == 'true'
-    if: github.repository == 'peterzhuamazon/OpenSearch' && needs.check-files.outputs.RUN_GRADLE_CHECK == 'true'
+    if: github.repository == 'opensearch-project/OpenSearch' && needs.check-files.outputs.RUN_GRADLE_CHECK == 'true'
     permissions:
       id-token: write # github oidc to assume aws roles
       contents: read # to fetch code (actions/checkout)
       pull-requests: write # to create or update comment (peter-evans/create-or-update-comment)
       issues: write # To create an issue if check fails on push.
     env:
-      CLAUDE_CODE_USE_BEDROCK: '1'
       AWS_REGION: 'us-east-1'
-      CLAUDE_CODE_MAX_INPUT_TOKENS: '200000'
+      CLAUDE_CODE_USE_BEDROCK: '1'
+      CLAUDE_CODE_MAX_INPUT_TOKENS: '160000'
       CLAUDE_CODE_MAX_OUTPUT_TOKENS: '4096'
       MAX_THINKING_TOKENS: '1024'
       DIFF_CONTENT_PATH: 'git_diff_content.txt'
@@ -135,27 +134,33 @@ jobs:
         run: |
           DIFF_CONTENT=$(cat $DIFF_CONTENT_PATH)
           PROMPT=$(cat <<-EOF
-          	Analyze the git diff between current commit HEAD and origin/main for security vulnerabilities and malicious code patterns.
+          	Analyze the git diff for MALICIOUS CODE and INTENTIONAL SECURITY THREATS.
           	
-          	Review for security issues including but not limited to:
-          	- Injection vulnerabilities (SQL, command, LDAP, template, etc.)
-          	- Cross-site scripting (XSS) and improper output encoding
-          	- Authentication and authorization flaws
-          	- Insecure deserialization and XML parsing
-          	- Malicious code (data exfiltration, backdoors, obfuscated logic)
-          	- Hardcoded secrets and credential exposure
-          	- Suspicious network calls or external communications
-          	- Privilege escalation attempts
-          	- Insecure file operations and path traversal
-          	- Cryptographic weaknesses and insecure randomness
-          	- Any other suspicious or anomalous code patterns
+          	**PRIMARY FOCUS: Detect deliberate attempts to compromise security, not coding mistakes.**
           	
+          	**Review for security issues including but not limited to:**
+          	- **Data exfiltration**: Unauthorized transmission of secrets, credentials, or sensitive data to external endpoints
+          	- **Backdoors**: Hidden access mechanisms, debug modes left enabled, or authentication bypasses
+          	- **Obfuscated logic**: Base64-encoded payloads, hex-encoded strings, heavily obfuscated code without clear purpose
+          	- **Suspicious network calls**: Unexpected external API calls, DNS queries, or data transmission to unknown domains
+          	- **Credential harvesting**: Code that captures, logs, or transmits credentials/tokens beyond normal usage
+          	- **Time bombs/logic bombs**: Code triggered by specific dates, conditions, or external signals
+          	- **Privilege escalation**: Deliberate attempts to gain elevated permissions or bypass authorization
+          	- **Supply chain attacks**: Suspicious dependency additions, modified package files, or unusual import statements
+          	- **Environment manipulation**: Attempts to modify CI/CD variables, Jenkins secrets, or deployment configurations
+          	- **Steganography or covert channels**: Hidden data transmission in images, comments, or metadata
           	
-          	Classify each issue by severity based on impact and exploitability:
-          	- **critical**: Allows immediate system compromise, data breach, or arbitrary code execution with minimal effort or authentication
-          	- **high**: Enables unauthorized access, significant data exposure, or system manipulation requiring moderate effort or preconditions
-          	- **medium**: Could lead to limited information disclosure, denial of service, or requires significant preconditions to exploit
-          	- **low**: Minor security weaknesses with minimal impact or requires extensive preconditions and authenticated access to exploit
+          	**IMPORTANT DISTINCTIONS:**
+          	- Ignore common coding mistakes (e.g., missing input validation unless clearly intentional)
+          	- Focus on INTENT: Is this code deliberately trying to do something malicious?
+          	- Consider context: Is this behavior justified by the feature being implemented?
+          	- Flag anomalies: Code that seems unrelated to the stated PR purpose
+          	
+          	**Classify each issue by severity:**
+          	- **critical**: Clear evidence of malicious intent with immediate security impact (data exfiltration, backdoors)
+          	- **high**: Highly suspicious patterns that likely indicate malicious intent but may have alternate explanations
+          	- **medium**: Unusual patterns that warrant investigation but could be legitimate
+          	- **low**: Minor anomalies or code that seems out of place but has plausible explanations
           	
           	**OUTPUT CONSTRAINTS:**
           	- Maximum 10 issues in the output
@@ -166,7 +171,7 @@ jobs:
           	
           	**IMPORTANT: Your response must be ONLY the raw JSON object. Do NOT wrap it in markdown code blocks. Do NOT add any explanation before or after. Start your response with { and end with }.**
           	
-          	Required JSON format:
+          	**Required JSON format:**
           	{
           	  "counts": {
           	    "total": <number>,
@@ -328,13 +333,9 @@ jobs:
             :white_check_mark: Gradle check result for ${{ env.pr_from_sha }}: [${{ env.result }}](${{ env.workflow_url }})
 
       - name: Extract Test Failure
-        if: ${{ github.event_name == 'pull_request_target' && env.result != 'SUCCESS' }}
+        if: ${{ github.event_name == 'pull_request_target' && env.DIFF_VALIDATED == 'true' && env.result != 'SUCCESS' }}
         run: |
-          if [ "$DIFF_VALIDATED" = "true" ]; then
-            TEST_FAILURES=`curl -s "${{ env.workflow_url }}/testReport/api/json?tree=suites\[cases\[status,className,name\]\]" | jq -r '.. | objects | select(.status=="FAILED",.status=="REGRESSION") | (.className + "." +  .name)' | uniq -c | sort -n -r | head -n 10`
-          else
-            TEST_FAILURES=""
-          fi
+          TEST_FAILURES=`curl -s "${{ env.workflow_url }}/testReport/api/json?tree=suites\[cases\[status,className,name\]\]" | jq -r '.. | objects | select(.status=="FAILED",.status=="REGRESSION") | (.className + "." +  .name)' | uniq -c | sort -n -r | head -n 10`
           if [[ "$TEST_FAILURES" != "" ]]
           then
             echo "test_failures<<EOF" >> $GITHUB_ENV
@@ -362,7 +363,7 @@ jobs:
         with:
           issue-number: ${{ env.pr_number }}
           body: |
-            :exclamation: Gradle check result for ${{ env.pr_from_sha }}: [${{ env.result }}](${{ env.workflow_url }})
+            :x: Gradle check result for ${{ env.pr_from_sha }}: [${{ env.result }}](${{ env.workflow_url }})
 
             Please examine the workflow log, locate, and copy-paste the failure(s) below, then iterate to green. Is the failure [a flaky test](https://github.com/opensearch-project/OpenSearch/blob/main/DEVELOPER_GUIDE.md#flaky-tests) unrelated to your change?
 
@@ -372,7 +373,7 @@ jobs:
         with:
           issue-number: ${{ env.pr_number }}
           body: |
-            :x: Gradle check **WAS NOT STARTED** for ${{ env.pr_from_sha }} due to automated code diff validation findings.
+            :exclamation: Gradle check **WAS NOT STARTED** for ${{ env.pr_from_sha }} due to automated code diff validation findings.
 
             **Pull Request Author**: Please update your Pull Request accordingly:
 
