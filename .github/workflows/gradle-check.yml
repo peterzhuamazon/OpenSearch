@@ -108,6 +108,8 @@ jobs:
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           BEDROCK_ACCESS_ROLE: op://opensearch-infra-secrets/aws-iam-roles/bedrock-access-role
+          JENKINS_GITHUB_USER: op://opensearch-infra-secrets/github-bot/jenkins-github-user
+          JENKINS_GITHUB_USER_TOKEN: op://opensearch-infra-secrets/github-bot/jenkins-github-user-token
 
       - name: Configure AWS credentials
         if: ${{ env.DIFF_VALIDATED != 'skipped'}}
