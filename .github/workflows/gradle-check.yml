@@ -100,7 +100,7 @@ jobs:
           pip install json-repair
 
       - name: Load secret
-        if: ${{ env.DIFF_VALIDATED != 'skipped'}}
+        if: ${{ env.DIFF_VALIDATED != 'false'}}
         uses: 1password/load-secrets-action@v3
         with:
           # Export loaded secrets as environment variables
@@ -272,7 +272,7 @@ jobs:
         run: |
           set -e
           set -o pipefail
-          bash opensearch-build/scripts/gradle/gradle-check.sh -t ${{ secrets.JENKINS_GRADLE_CHECK_GENERIC_WEBHOOK_TOKEN }} -u ${{ secrets.JENKINS_GITHUB_USER}} -p ${{ secrets.JENKINS_GITHUB_USER_TOKEN}} | tee -a gradle-check.log
+          bash opensearch-build/scripts/gradle/gradle-check.sh -t ${{ secrets.JENKINS_GRADLE_CHECK_GENERIC_WEBHOOK_TOKEN }} -u $JENKINS_GITHUB_USER -p $JENKINS_GITHUB_USER_TOKEN | tee -a gradle-check.log
 
       - name: Setup Result Status
         if: always()
