@@ -6,7 +6,7 @@ on:
 #      - 'create-pull-request/**'
 #      - 'dependabot/**'
   pull_request_target:
-    types: [opened, synchronize, reopened, labeled]
+    types: [opened, synchronize, reopened]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
@@ -58,10 +58,10 @@ jobs:
           elif [ "${{ github.event_name }}" = "pull_request_target" ]; then
             bash_sha=${{ github.event.pull_request.base.sha }}
             head_sha=${{ github.event.pull_request.head.sha }}
-            if [ "${{ github.event.action }}" = "labeled" ]; then
-              PR_LABELS=`echo "${{ toJson(github.event.pull_request.labels.*.name) }}" | sed -e 's/\[//g;s/\]//g;s/^\s*//g;s/\s*$//g' | tr -d '\n'`
-              echo "labels: $PR_LABELS"
-              export IFS=','
+            PR_LABELS=`echo "${{ toJson(github.event.pull_request.labels.*.name) }}" | sed -e 's/\[//g;s/\]//g;s/^\s*//g;s/\s*$//g' | tr -d '\n'`
+            echo "labels: $PR_LABELS"
+            export IFS=','
+            if [ -n "$PR_LABELS" ]; then
               for label in $PR_LABELS
               do
                 if [[ "$label" = "skip-diff-validation" ]]; then
@@ -355,7 +355,7 @@ jobs:
 
             ***
 
-            **OpenSearch-Core Maintainers**: you can bypass this validation by adding label `skip-diff-validation` after reviewing the changes carefully.
+            **OpenSearch-Core Maintainers**: you can bypass this validation by adding label `skip-diff-validation` after reviewing the changes carefully, then re-trigger check.
 
             :warning: Note: This validation helps protect against potentially harmful code patterns. Please ensure you have thoroughly reviewed the changes before bypassing.
 
