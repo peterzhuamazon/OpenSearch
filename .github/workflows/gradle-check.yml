@@ -154,7 +154,6 @@ jobs:
           json_repair $DIFF_REPORT_PATH --inline --strict
           echo "Processing AI results"
           diff_report_json=`cat $DIFF_REPORT_PATH | jq -c '.'`
-          echo "DIFF_REPORT_JSON=$diff_report_json" >> $GITHUB_ENV
           echo "-------------------------------------------------------"
           echo $diff_report_json | jq -r
           echo "-------------------------------------------------------"
@@ -162,12 +161,13 @@ jobs:
           unset AWS_SECRET_ACCESS_KEY  
 
           echo "Start issue count"
-          DIFF_ISSUE_COUNT=$(echo $DIFF_REPORT_JSON | jq -r .counts.total)
+          DIFF_ISSUE_COUNT=$(echo $diff_report_json | jq -r .counts.total)
           echo "Found $DIFF_ISSUE_COUNT issues"
           echo "-------------------------------------------------------"
           if [ "$DIFF_ISSUE_COUNT" != "0" ]; then
             echo "Diff has issues"
-            diff_report=$(echo "$DIFF_REPORT_JSON" | jq -r '
+            echo "DIFF_VALIDATED=false" >> $GITHUB_ENV
+            diff_report=$(echo "$diff_report_json" | jq -r '
               "<table><tr><th>Path</th><th>Line</th><th>Severity</th><th>Description</th></tr>" +
               (
                 .issues | map(
@@ -184,7 +184,6 @@ jobs:
               " | Low: " + (.counts.low | tostring) + "</p>"
             ')
             echo "DIFF_REPORT=$diff_report" >> $GITHUB_ENV
-            echo "DIFF_VALIDATED=false" >> $GITHUB_ENV
             exit 1
           else
             echo "Diff validated"
@@ -258,8 +257,7 @@ jobs:
       - name: Setup Result Status
         if: always()
         run: |
-          github_event_name=${{ github.event_name }}
-          if [ "$DIFF_VALIDATED" = "true" ] || [ "$github_event_name" = "push" ]; then
+          if [ "$DIFF_VALIDATED" = "true" ]; then
             WORKFLOW_URL=`cat gradle-check.log | grep 'WORKFLOW_URL' | awk '{print $2}'`
             RESULT=`cat gradle-check.log | grep 'Result:' | awk '{print $2}'`
           else
