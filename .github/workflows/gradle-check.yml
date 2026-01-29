@@ -347,7 +347,7 @@ jobs:
         with:
           issue-number: ${{ env.pr_number }}
           body: |
-            :x: Gradle check `**WAS NOT STARTED** for ${{ env.pr_from_sha }} due to automated code diff validation findings.
+            :x: Gradle check **WAS NOT STARTED** for ${{ env.pr_from_sha }} due to automated code diff validation findings.
 
             **Pull Request Author**: Please update your Pull Request accordingly:
 
