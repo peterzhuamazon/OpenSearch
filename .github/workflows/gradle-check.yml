@@ -203,7 +203,7 @@ jobs:
           path: opensearch-build
   
       - name: Setup environment variables (PR)
-        if: github.event_name == 'pull_request_target'
+        if: ${{ always() && github.event_name == 'pull_request_target' }}
         run: |
           echo "event_name=pull_request_target" >> $GITHUB_ENV
           echo "branch_name=$(jq --raw-output .pull_request.base.ref $GITHUB_EVENT_PATH)" >> $GITHUB_ENV
