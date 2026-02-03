@@ -1,10 +1,10 @@
 name: Gradle Check (Jenkins)
 on:
-  push:
-    branches-ignore:
-      - 'backport/**'
-      - 'create-pull-request/**'
-      - 'dependabot/**'
+#  push:
+#    branches-ignore:
+#      - 'backport/**'
+#      - 'create-pull-request/**'
+#      - 'dependabot/**'
   pull_request_target:
     types: [opened, synchronize, reopened]
 
@@ -31,9 +31,20 @@ jobs:
           .github/**
           *.md
 
-  gradle-check:
+  Code-Diff-Analyzer:
+    uses: peterzhuamazon/opensearch-build/.github/workflows/code-diff-analyzer.yml@gradle-check-ai-yml
+    if: ${{ github.repository == 'peterzhuamazon/OpenSearch' && needs.check-files.outputs.RUN_GRADLE_CHECK == 'true' }}
     needs: check-files
-    if: github.repository == 'opensearch-project/OpenSearch' && needs.check-files.outputs.RUN_GRADLE_CHECK == 'true'
+    permissions:
+      id-token: write # github oidc to assume aws roles
+    secrets:
+      OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+#    with:
+#      update_pr_comment_with_validation_report: true
+  
+  gradle-check:
+    needs: Code-Diff-Analyzer
+    if: ${{ needs.Code-Diff-Analyzer.outputs.DIFF_VALIDATION_LEVELS == '0' || needs.Code-Diff-Analyzer.outputs.DIFF_VALIDATION_LEVELS == '9' }}
     permissions:
       contents: read # to fetch code (actions/checkout)
       pull-requests: write # to create or update comment (peter-evans/create-or-update-comment)
