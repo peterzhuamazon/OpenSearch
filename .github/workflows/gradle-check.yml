@@ -39,8 +39,8 @@ jobs:
       id-token: write # github oidc to assume aws roles
     secrets:
       OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
-#    with:
-#      update_pr_comment_with_validation_report: true
+    with:
+      update_pr_comment_with_validation_report: true
   
   gradle-check:
     needs: Code-Diff-Analyzer
