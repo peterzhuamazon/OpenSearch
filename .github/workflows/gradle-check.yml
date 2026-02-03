@@ -37,6 +37,7 @@ jobs:
     needs: check-files
     permissions:
       id-token: write # github oidc to assume aws roles
+      pull-requests: write # to create or update comment (peter-evans/create-or-update-comment)
     secrets:
       OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
     with:
