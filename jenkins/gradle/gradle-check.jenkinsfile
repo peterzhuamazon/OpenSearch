@@ -157,7 +157,7 @@ pipeline {
                 }
                 always {
                     sh '''
-                    mkdir codeCoverage
+                    mkdir codeCoverage/
 
                     for file in $(find search/server/build/reports/jacoco/ -name '*.xml'); do
                         cp -v "$file" codeCoverage/
